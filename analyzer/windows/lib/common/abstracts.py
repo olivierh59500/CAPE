@@ -168,7 +168,7 @@ class Package(object):
             raise CuckooPackageError("Unable to execute the initial process, "
                                      "analysis aborted.")
 
-        p.debug_inject(dll, INJECT_QUEUEUSERAPC, interest)
+        p.debug_inject(dll, interest, childprocess=False)
         p.resume()
         p.close()
         
@@ -186,10 +186,11 @@ class Package(object):
         If specified to do so, this method dumps the memory of
         all running processes.
         """
-        if self.options.get("procmemdump"):
-            for pid in self.pids:
-                p = Process(pid=pid)
-                p.dump_memory()
+        # Process dumping is now handled in-process (CAPE)
+        #if self.options.get("procmemdump"):
+        #    for pid in self.pids:
+        #        p = Process(pid=pid)
+        #        p.dump_memory()
         
         return True
 

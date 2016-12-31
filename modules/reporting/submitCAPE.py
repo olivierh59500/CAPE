@@ -47,30 +47,26 @@ class SubmitCAPE(Report):
         db = Database()
         detections = set()
 
-        ##### Initial static hits from yara
+        ##### Initial static hits from CAPE's yara signatures
         #####
         if "target" in results:
             target = results["target"]
             if "file" in target:
                 file = target["file"]
-                if "yara" in file:
-                    for entry in file["yara"]:
+                if "cape_yara" in file:
+                    for entry in file["cape_yara"]:
                         parent_package = report["info"].get("package")
                         if parent_package.startswith('CAPE'):
                             continue
 
-                        if entry["name"] == "qwertyuiop":
-                            detections.add('CAPE_PirpiPassword')
+                        #if entry["name"] == "Pirpi":
+                        #    detections.add('CAPE_PirpiPassword')
         
-                        #if entry["name"] == "sakula_v1_2":
-                        #    password = pirpi_password(entry["strings"])
-                        #    detections.add('CAPE_Sakula')
-        
-                        if entry["name"] == "CAPE Crossfire":
+                        if entry["name"] == "Azzy":
                             #for address in entry["addresses"]:
                                 #self.task_options_stack.append("breakpoint{0}={1}".format(index, address)
                             self.task_options_stack.append("breakpoint={0}".format(entry["addresses"][0]))
-                            detections.add('CAPE_Crossfire')
+                            detections.add('CAPE_Azzy')
                             
                         #if entry["name"] == "CAPE EvilGrab":
                         #    detections.add('CAPE_EvilGrab')                            
@@ -95,20 +91,30 @@ class SubmitCAPE(Report):
                         if parent_package=='dll':
                             detections.add('CAPE_Injection_dll')    
                             continue
-                    detections.add('CAPE_Injection')
+                        if parent_package=='zip':
+                            detections.add('CAPE_Injection_zip')    
+                            continue
+                        detections.add('CAPE_Injection')
                 
-                elif entry["name"] == "allocation_rwx":
+                elif entry["name"] == "extraction_rwx":
                     if report["info"].has_key("package"):
                         parent_package = report["info"].get("package")
                         if parent_package.startswith('CAPE'):
                             continue
                         if parent_package=='doc':
-                            detections.add('CAPE_Extraction_doc')    
+                        #    detections.add('CAPE_Extraction_doc')
+                        # Word triggers this so removed
+                            continue
+                        if parent_package=='zip':
+                            detections.add('CAPE_Extraction_zip')    
                             continue
                         if parent_package=='dll':
                             detections.add('CAPE_Extraction_dll')    
                             continue
-                    detections.add('CAPE_Extraction')
+                        if parent_package=='regsvr':
+                            detections.add('CAPE_Extraction_regsvr')    
+                            continue
+                        detections.add('CAPE_Extraction')
                 
                 elif entry["name"] == "CAPE Compression":
                     if report["info"].has_key("package"):
@@ -121,7 +127,7 @@ class SubmitCAPE(Report):
                         if parent_package=='doc':
                             detections.add('CAPE_Compression_doc')    
                             continue                            
-                    detections.add('CAPE_Compression')
+                        detections.add('CAPE_Compression')
                     
         ##### Malware families
         #####
@@ -143,7 +149,7 @@ class SubmitCAPE(Report):
                         if parent_package=='dll':
                             detections.add('CAPE_PlugX_dll')    
                             continue
-                    detections.add('CAPE_PlugX')
+                        detections.add('CAPE_PlugX')
 
                 elif entry["name"] == "CAPE PlugX fuzzy":
                     if report["info"].has_key("package"):
@@ -162,21 +168,21 @@ class SubmitCAPE(Report):
                         if parent_package=='dll':
                             detections.add('CAPE_PlugX_fuzzy_dll')                              
                             continue
-                    detections.add('CAPE_PlugX_fuzzy')    
+                        detections.add('CAPE_PlugX_fuzzy')    
                                             
                 elif entry["name"] == "CAPE Derusbi":
                     if report["info"].has_key("package"):
                         parent_package = report["info"].get("package")
                         if parent_package.startswith('CAPE'):
                             continue
-                    detections.add('CAPE_Derusbi')
+                        detections.add('CAPE_Derusbi')
                     
                 elif entry["name"] == "CAPE EvilGrab":
                     if report["info"].has_key("package"):
                         parent_package = report["info"].get("package")
                         if parent_package.startswith('CAPE'):
                             continue
-                    detections.add('CAPE_EvilGrab')
+                        detections.add('CAPE_EvilGrab')
         
         # We only want to submit a single job if we have a
         # malware detection. A given package should do 
@@ -225,13 +231,13 @@ class SubmitCAPE(Report):
         if package:
             task_id = db.add_path(file_path=self.task["target"],
                                     package=package,
-                                    timeout=0,	# this doesn't work
+                                    timeout=self.task["timeout"],
                                     options=self.task_options,
-                                    priority=1,
+                                    priority=self.task["priority"]+1,   # increase priority to expedite related submission
                                     machine=self.task["machine"],
                                     platform=self.task["platform"],
-                                    memory=False,
-                                    enforce_timeout=True,
+                                    memory=self.task["memory"],
+                                    enforce_timeout=self.task["enforce_timeout"],
                                     clock=None,
                                     tags=None)
             if task_id:
@@ -242,17 +248,17 @@ class SubmitCAPE(Report):
         else: #nothing submitted, only 'dumpers' left, let's do them all
             for dumper in detections:
                 # only submit Extraction if no other dumpers are detected
-                if len(detections) > 1 and dumper.startswith('CAPE_Extraction'):
-                    continue
+                #if len(detections) > 1 and dumper.startswith('CAPE_Extraction'):
+                #    continue
                 task_id = db.add_path(file_path=self.task["target"],
                                 package=dumper,
-                                timeout=0,	# this doesn't work
+                                timeout=self.task["timeout"],
                                 options=self.task_options,
-                                priority=1,
+                                priority=self.task["priority"]+1,   # increase priority to expedite related submission
                                 machine=self.task["machine"],
                                 platform=self.task["platform"],
-                                memory=False,
-                                enforce_timeout=True,
+                                memory=self.task["memory"],
+                                enforce_timeout=self.task["enforce_timeout"],
                                 clock=None,
                                 tags=None)
                 if task_id:

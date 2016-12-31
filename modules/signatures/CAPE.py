@@ -1,5 +1,7 @@
 from lib.cuckoo.common.abstracts import Signature
 
+EXTRACTION_MIN_SIZE = 0x2000
+
 class CAPE_PlugX(Signature):
     name = "CAPE PlugX"
     description = "CAPE detection: PlugX"
@@ -73,12 +75,6 @@ class CAPE_PlugX_fuzzy(Signature):
                 self.plugx = True
             if "MZ" in buf:
                 self.compressed_binary = True
-
-        #if call["api"] == "memcpy":
-            #count = self.get_raw_argument(call, "count")
-            #if (count > 0xa00)  and \
-               #(count < 0x5000):
-                #self.config_copy = True
 
     def on_complete(self):
         if self.config_copy == True and self.compressed_binary == True:
@@ -179,4 +175,38 @@ class CAPE_EvilGrab(Signature):
         else:
             return False
             
+class ExtractionRWX(Signature):
+    name = "extraction_rwx"
+    description = "CAPE detection: Extraction"
+    severity = 1
+    categories = ["allocation"]
+    authors = ["Context"]
+    minimum = "1.2"
+    evented = True
+    
+    def __init__(self, *args, **kwargs):
+        Signature.__init__(self, *args, **kwargs)
 
+    filter_apinames = set(["NtAllocateVirtualMemory","NtProtectVirtualMemory","VirtualProtectEx"])
+
+    # PAGE_EXECUTE_READWRITE = 0x00000040
+    
+    def on_call(self, call, process):
+        if call["api"] == "NtAllocateVirtualMemory":
+            protection = self.get_argument(call, "Protection")
+            regionsize = int(self.get_raw_argument(call, "RegionSize"), 0)
+            handle = self.get_argument(call, "ProcessHandle")
+            if handle == "0xffffffff" and protection == "0x00000040" and regionsize >= EXTRACTION_MIN_SIZE:
+                return True
+        if call["api"] == "VirtualProtectEx":
+            protection = self.get_argument(call, "Protection")
+            size = int(self.get_raw_argument(call, "Size"), 0)
+            handle = self.get_argument(call, "ProcessHandle")
+            if handle == "0xffffffff" and protection == "0x00000040" and size >= EXTRACTION_MIN_SIZE:
+                return True
+        elif call["api"] == "NtProtectVirtualMemory":
+            protection = self.get_argument(call, "NewAccessProtection")
+            size = int(self.get_raw_argument(call, "NumberOfBytesProtected"), 0)
+            handle = self.get_argument(call, "ProcessHandle")
+            if handle == "0xffffffff" and protection == "0x00000040" and size >= EXTRACTION_MIN_SIZE:
+                return True
